@@ -1,8 +1,9 @@
 # WGPUStatic
 
-WGPUStatic is a Go extension project for binding the Rust implementation of
-[`wgpu-native`](https://github.com/gfx-rs/wgpu-native) through a statically
-linked native library.
+WGPUStatic is a Go language extension that statically binds WGPU/Native—the C
+API implementation of the Rust-based [`wgpu-native`](https://github.com/gfx-rs/wgpu-native)—through
+Hike/SXSO. Once the generated wrapper and static archive are available, an
+application can link WGPU by simply running `go build`.
 
 The project keeps the Go-facing WGPU interface close to the existing FFI-based
 WebGPU binding. The `wgpu` package source is based on the source used by the Go
@@ -15,6 +16,20 @@ The main difference from the original FFI project is the native link model:
 |---|---|---|
 | Original FFI project | Pure-Go FFI with the existing WGPU binding | Loaded dynamically at runtime |
 | WGPUStatic | The same FFI-oriented WGPU binding sources | Rust `wgpu-native` linked into the executable as a static archive |
+
+## About WGPU
+
+[`wgpu`](https://github.com/gfx-rs/wgpu) is a cross-platform, safe, pure-Rust
+graphics API. It runs natively on Vulkan, Metal, Direct3D12, and OpenGL, and
+can also run on WebGL2 and WebGPU through WebAssembly.
+
+Its API is based on the [WebGPU standard](https://www.w3.org/TR/webgpu/), but
+it is implemented as a fully native Rust library. The WGPU ecosystem is used
+as the graphics foundation for projects such as Firefox, Servo, and Deno.
+
+WGPU-Native exposes this native implementation through a C API, making it
+possible to use WGPU from C and other languages. WGPUStatic uses that C API as
+the native boundary and links it statically into Go applications.
 
 ## Architecture
 
@@ -65,6 +80,28 @@ Windows target. The Rust compiler and Cargo must be selected explicitly when
 the MSYS2 installation appears earlier in `PATH` than the Rust installation.
 
 ## Build the native library
+
+The repository root includes a `Makefile` that automates the Windows GNU
+target build and copies the resulting archive into the Go static-link package:
+
+```powershell
+make native-release
+```
+
+For a debug archive, use:
+
+```powershell
+make native-debug
+```
+
+The Rust compiler, linker, and LLVM paths can be overridden when necessary:
+
+```powershell
+make native-release `
+  RUSTC='C:/Users/your-user/.cargo/bin/rustc.exe' `
+  LINKER='C:/local/gnu/msys64/ucrt64/bin/clang.exe' `
+  LIBCLANG_PATH='C:/local/gnu/clang+llvm-18.1.8-x86_64-pc-windows-msvc/bin'
+```
 
 From `third_party/wgpu-native`, use the following PowerShell configuration:
 
