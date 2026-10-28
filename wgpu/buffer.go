@@ -1,0 +1,259 @@
+package wgpu
+
+import (
+	"context"
+	"sync"
+	"unsafe"
+
+	"github.com/gogpu/gputypes"
+	"github.com/kanryu/wgpu-static/internal/wgpunative"
+)
+
+// MapMode specifies the mapping mode for MapAsync.
+type MapMode uint64
+
+const (
+	// MapModeNone indicates no mapping mode (default).
+	MapModeNone MapMode = 0x0000000000000000
+	// MapModeRead maps the buffer for reading via GetMappedRange.
+	MapModeRead MapMode = 0x0000000000000001
+	// MapModeWrite maps the buffer for writing via GetMappedRange.
+	MapModeWrite MapMode = 0x0000000000000002
+)
+
+// MapAsyncStatus is the status returned by MapAsync callback.
+type MapAsyncStatus uint32
+
+const (
+	// MapAsyncStatusSuccess indicates the buffer was successfully mapped.
+	MapAsyncStatusSuccess MapAsyncStatus = 0x00000001
+	// MapAsyncStatusCallbackCancelled indicates the callback was cancelled.
+	MapAsyncStatusCallbackCancelled MapAsyncStatus = 0x00000002
+	// MapAsyncStatusError indicates a mapping error occurred.
+	MapAsyncStatusError MapAsyncStatus = 0x00000003
+	// MapAsyncStatusAborted indicates the mapping was aborted (e.g., buffer destroyed).
+	MapAsyncStatusAborted MapAsyncStatus = 0x00000004
+
+	// Deprecated: use MapAsyncStatusCallbackCancelled.
+	MapAsyncStatusInstanceDropped = MapAsyncStatusCallbackCancelled
+)
+
+// mapRequest holds state for an async map request.
+type mapRequest struct {
+	done    chan struct{}
+	status  MapAsyncStatus
+	message string
+}
+
+var (
+	// mapRequests is the global registry for pending map requests.
+	// Protected by mapRequestsMu for concurrent access.
+	mapRequests   = make(map[uintptr]*mapRequest)
+	mapRequestsMu sync.Mutex
+	mapRequestID  uintptr
+
+	// mapCallbackPtr is the callback function pointer (created once).
+	// Protected by mapCallbackOnce for concurrent initialization.
+	mapCallbackPtr  uintptr
+	mapCallbackOnce sync.Once
+)
+
+// handleMapCallback completes a request after the platform callback entry
+// normalizes the ABI-specific WGPUStringView representation.
+func handleMapCallback(status uintptr, message StringView, userdata1 uintptr) uintptr {
+	// Find and complete the request
+	mapRequestsMu.Lock()
+	req, ok := mapRequests[userdata1]
+	if ok {
+		delete(mapRequests, userdata1)
+	}
+	mapRequestsMu.Unlock()
+
+	if ok && req != nil {
+		req.status = MapAsyncStatus(status)
+		req.message = stringViewToString(message)
+		close(req.done)
+	}
+	return 0
+}
+
+// initMapCallback creates the platform-correct C callback function pointer.
+func initMapCallback() {
+	mapCallbackPtr = newCallback(mapCallbackEntry)
+}
+
+// BufferDescriptor describes a GPU buffer to create.
+type BufferDescriptor struct {
+	Label            string               // Buffer label for debugging
+	Usage            gputypes.BufferUsage // How the buffer will be used
+	Size             uint64               // Size in bytes
+	MappedAtCreation bool                 // If true, buffer is mapped when created
+}
+
+// bufferDescriptorWire is the FFI-compatible C-layout struct for wgpu-native.
+// CRITICAL: layout must match WGPUBufferDescriptor exactly.
+// nextInChain(8)+label(16)+usage(8)+size(8)+mappedAtCreation(4)+pad(4) = 48 bytes.
+type bufferDescriptorWire struct {
+	NextInChain      uintptr              // *ChainedStruct
+	Label            StringView           // Buffer label for debugging
+	Usage            gputypes.BufferUsage // How the buffer will be used
+	Size             uint64               // Size in bytes
+	MappedAtCreation Bool                 // If true, buffer is mapped when created
+	_pad             [4]byte              //nolint:unused // padding for FFI alignment
+}
+
+// CreateBuffer creates a new GPU buffer.
+// Returns an error if the FFI call fails or the device/descriptor is nil.
+func (d *Device) CreateBuffer(desc *BufferDescriptor) (*Buffer, error) {
+	if err := checkInit(); err != nil {
+		return nil, err
+	}
+	if d == nil || d.handle == 0 {
+		return nil, &WGPUError{Op: "CreateBuffer", Message: "device is nil or released"}
+	}
+	if desc == nil {
+		return nil, &WGPUError{Op: "CreateBuffer", Message: "descriptor is nil"}
+	}
+	wire := bufferDescriptorWire{
+		Label:            stringToStringView(desc.Label),
+		Usage:            desc.Usage,
+		Size:             desc.Size,
+		MappedAtCreation: boolToWGPU(desc.MappedAtCreation),
+	}
+	handle := wgpunative.DeviceCreateBuffer(
+		d.handle,
+		uintptr(unsafe.Pointer(&wire)),
+	)
+	if handle == 0 {
+		return nil, &WGPUError{Op: "CreateBuffer", Message: "wgpu returned null handle"}
+	}
+	trackResource(handle, "Buffer")
+	return &Buffer{handle: handle, device: d}, nil
+}
+
+// GetMappedRange returns a pointer to the mapped buffer data.
+// The buffer must be mapped (either via MapAsync or MappedAtCreation).
+// offset and size specify the range to access.
+// Returns nil if the buffer is not mapped or the range is invalid.
+func (b *Buffer) GetMappedRange(offset, size uint64) unsafe.Pointer {
+	mustInit()
+	if b == nil || b.handle == 0 {
+		return nil
+	}
+	ptr := wgpunative.BufferGetMappedRange(
+		b.handle,
+		uintptr(offset),
+		uintptr(size),
+	)
+	if ptr == 0 {
+		return nil
+	}
+	return ptrFromUintptr(ptr)
+}
+
+// Unmap unmaps the buffer, making the mapped memory inaccessible.
+// For buffers created with MappedAtCreation, this commits the data to the GPU.
+// Returns nil on success. Matches gogpu/wgpu Buffer.Unmap() error signature.
+func (b *Buffer) Unmap() error {
+	mustInit()
+	if b == nil || b.handle == 0 {
+		return nil
+	}
+	wgpunative.BufferUnmap(b.handle)
+	// wgpu-native returns void for wgpuBufferUnmap; always nil per WebGPU spec.
+	return nil
+}
+
+// Size returns the size of the buffer in bytes.
+func (b *Buffer) Size() uint64 {
+	mustInit()
+	if b == nil || b.handle == 0 {
+		return 0
+	}
+	size := wgpunative.BufferGetSize(b.handle)
+	return uint64(size)
+}
+
+// MapAsyncBlocking maps a buffer for reading or writing, blocking until complete.
+// Deprecated: Use [Buffer.Map] for blocking mapping or [Buffer.MapAsync] for non-blocking.
+// This method is retained for backward compatibility.
+func (b *Buffer) MapAsyncBlocking(device *Device, mode MapMode, offset, size uint64) error {
+	if device != nil && b.device == nil {
+		b.device = device
+	}
+	return b.Map(context.Background(), mode, offset, size)
+}
+
+// Destroy destroys the buffer, making it invalid.
+func (b *Buffer) Destroy() {
+	mustInit()
+	if b.handle != 0 {
+		wgpunative.BufferDestroy(b.handle)
+	}
+}
+
+// Release releases the buffer reference.
+func (b *Buffer) Release() {
+	if b.handle != 0 {
+		untrackResource(b.handle)
+		wgpunative.BufferRelease(b.handle)
+		b.handle = 0
+	}
+}
+
+// WriteBuffer writes data to a buffer.
+// Returns nil on success. In this FFI implementation errors are surfaced through
+// the Device uncaptured-error callback; the signature matches gogpu/wgpu for API compatibility.
+func (q *Queue) WriteBuffer(buffer *Buffer, offset uint64, data []byte) error {
+	mustInit()
+	if q == nil || q.handle == 0 || buffer == nil || buffer.handle == 0 || len(data) == 0 {
+		return nil
+	}
+	wgpunative.QueueWriteBuffer(
+		q.handle,
+		buffer.handle,
+		uintptr(offset),
+		uintptr(unsafe.Pointer(&data[0])),
+		uintptr(len(data)),
+	)
+	return nil
+}
+
+// WriteBufferTyped writes typed data to a buffer.
+// The data pointer should point to the first element, size is total byte size.
+func (q *Queue) WriteBufferRaw(buffer *Buffer, offset uint64, data unsafe.Pointer, size uint64) {
+	mustInit()
+	if q == nil || q.handle == 0 || buffer == nil || buffer.handle == 0 || size == 0 {
+		return
+	}
+	wgpunative.QueueWriteBuffer(
+		q.handle,
+		buffer.handle,
+		uintptr(offset),
+		uintptr(data),
+		uintptr(size),
+	)
+}
+
+// Usage returns the usage flags of this buffer.
+func (b *Buffer) Usage() gputypes.BufferUsage {
+	mustInit()
+	if b == nil || b.handle == 0 {
+		return gputypes.BufferUsageNone
+	}
+	usage := wgpunative.BufferGetUsage(b.handle)
+	return gputypes.BufferUsage(usage)
+}
+
+// MapState returns the current mapping state of this buffer.
+func (b *Buffer) MapState() BufferMapState {
+	mustInit()
+	if b == nil || b.handle == 0 {
+		return BufferMapStateUnmapped
+	}
+	state := wgpunative.BufferGetMapState(b.handle)
+	return BufferMapState(state)
+}
+
+// Handle returns the underlying handle. For advanced use only.
+func (b *Buffer) Handle() uintptr { return b.handle }

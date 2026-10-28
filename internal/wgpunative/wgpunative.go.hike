@@ -1,0 +1,470 @@
+// WebGPU native C ABI declarations for Hike.
+//
+// This file mirrors the wgpu-native extensions declared by
+// third_party/wgpu-native/ffi/wgpu.h.  The standard WebGPU declarations are
+// provided by ffi/webgpu-headers/webgpu.h and use the same ABI conventions.
+//
+// ABI mapping used here:
+//   - WGPU handles, structures, callbacks and strings: *byte
+//   - WGPUBool and C enum/flags values: uint32 (flags wider than 32 bits use uint64)
+//   - size_t, uint64_t and WGPUSubmissionIndex: uint64
+//   - C float: float32
+package wgpunative
+
+// CallbackInfoWire is the five-word Windows x64 ABI record shared by the
+// generated trampolines and the higher-level wgpu package.
+type CallbackInfoWire struct {
+    NextInChain uintptr
+    Mode uintptr
+    Callback uintptr
+    Userdata1 uintptr
+    Userdata2 uintptr
+}
+
+// Callback descriptors mirrored from the wgpu package.  Keeping these
+// layouts in the Hike source makes the callback-bearing device descriptor
+// fields explicit and keeps their Windows amd64 ABI representation visible
+// next to CallbackInfoWire.
+type RequestDeviceCallbackInfo struct {
+    NextInChain uintptr
+    Mode uintptr
+    Callback uintptr
+    Userdata1 uintptr
+    Userdata2 uintptr
+}
+
+type DeviceLostCallbackInfo struct {
+    NextInChain uintptr
+    Mode uintptr
+    Callback uintptr
+    Userdata1 uintptr
+    Userdata2 uintptr
+}
+
+type UncapturedErrorCallbackInfo struct {
+    NextInChain uintptr
+    Callback uintptr
+    Userdata1 uintptr
+    Userdata2 uintptr
+}
+
+
+// Core WebGPU entry points used by the static triangle path. Descriptor and
+// callback-info values are passed as pointers to their C-layout storage; this
+// is the Windows ABI representation used by wgpu-native for these aggregates.
+extern func wgpuCreateInstance(descriptor *byte) *byte
+extern func wgpuInstanceRelease(instance *byte)
+extern func wgpuInstanceProcessEvents(instance *byte)
+extern func wgpuInstanceCreateSurface(instance *byte, descriptor *byte) *byte
+extern func wgpuInstanceRequestAdapter(instance *byte, options *byte, callbackInfo *byte) uint64
+extern func wgpuAdapterRelease(adapter *byte)
+extern func wgpuAdapterRequestDevice(adapter *byte, descriptor *byte, callbackInfo *byte) uint64
+extern func wgpuDeviceRelease(device *byte)
+extern func wgpuDeviceGetQueue(device *byte) *byte
+extern func wgpuDeviceCreateShaderModule(device *byte, descriptor *byte) *byte
+extern func wgpuShaderModuleRelease(shaderModule *byte)
+extern func wgpuDeviceCreatePipelineLayout(device *byte, descriptor *byte) *byte
+extern func wgpuPipelineLayoutRelease(layout *byte)
+extern func wgpuSurfaceGetCapabilities(surface *byte, adapter *byte, capabilities *byte) uint32
+extern func wgpuSurfaceCapabilitiesFreeMembers(capabilities *byte)
+extern func wgpuSurfaceConfigure(surface *byte, config *byte)
+extern func wgpuSurfaceGetCurrentTexture(surface *byte, texture *byte)
+extern func wgpuSurfacePresent(surface *byte)
+extern func wgpuSurfaceRelease(surface *byte)
+extern func wgpuTextureCreateView(texture *byte, descriptor *byte) *byte
+extern func wgpuTextureViewRelease(view *byte)
+extern func wgpuTextureRelease(texture *byte)
+extern func wgpuDeviceCreateRenderPipeline(device *byte, descriptor *byte) *byte
+extern func wgpuRenderPipelineRelease(pipeline *byte)
+extern func wgpuDeviceCreateCommandEncoder(device *byte, descriptor *byte) *byte
+extern func wgpuCommandEncoderBeginRenderPass(encoder *byte, descriptor *byte) *byte
+extern func wgpuRenderPassEncoderSetPipeline(pass *byte, pipeline *byte)
+extern func wgpuRenderPassEncoderDraw(pass *byte, vertexCount uint32, instanceCount uint32, firstVertex uint32, firstInstance uint32)
+extern func wgpuRenderPassEncoderEnd(pass *byte)
+extern func wgpuRenderPassEncoderRelease(pass *byte)
+extern func wgpuCommandEncoderFinish(encoder *byte, descriptor *byte) *byte
+extern func wgpuCommandEncoderRelease(encoder *byte)
+extern func wgpuCommandBufferRelease(buffer *byte)
+extern func wgpuQueueSubmit(queue *byte, commandCount uint64, commands *byte)
+extern func wgpuQueueRelease(queue *byte)
+
+// Report and adapter enumeration.
+extern func wgpuGenerateReport(instance *byte, report *byte)
+extern func wgpuInstanceEnumerateAdapters(instance *byte, options *byte, adapters *byte) uint64
+
+// Queue and device extensions.
+extern func wgpuQueueSubmitForIndex(queue *byte, commandCount uint64, commands *byte) uint64
+extern func wgpuQueueGetTimestampPeriod(queue *byte) float32
+extern func wgpuDevicePoll(device *byte, wait uint32, submissionIndex *byte) uint32
+extern func wgpuDeviceCreateShaderModuleSpirV(device *byte, descriptor *byte) *byte
+
+// Native logging.
+extern func wgpuSetLogCallback(callback *byte, userdata *byte)
+extern func wgpuSetLogLevel(level uint32)
+extern func wgpuGetVersion() uint32
+
+// Backend-native Metal handles. The returned pointers are borrowed.
+extern func wgpuDeviceGetNativeMetalDevice(device *byte) *byte
+extern func wgpuQueueGetNativeMetalCommandQueue(queue *byte) *byte
+extern func wgpuTextureGetNativeMetalTexture(texture *byte) *byte
+
+// Multi-draw extensions.
+extern func wgpuRenderPassEncoderMultiDrawIndirect(encoder *byte, buffer *byte, offset uint64, count uint32)
+extern func wgpuRenderPassEncoderMultiDrawIndexedIndirect(encoder *byte, buffer *byte, offset uint64, count uint32)
+extern func wgpuRenderPassEncoderMultiDrawIndirectCount(encoder *byte, buffer *byte, offset uint64, countBuffer *byte, countBufferOffset uint64, maxCount uint32)
+extern func wgpuRenderPassEncoderMultiDrawIndexedIndirectCount(encoder *byte, buffer *byte, offset uint64, countBuffer *byte, countBufferOffset uint64, maxCount uint32)
+
+// Pipeline statistics query extensions.
+extern func wgpuComputePassEncoderBeginPipelineStatisticsQuery(computePassEncoder *byte, querySet *byte, queryIndex uint32)
+extern func wgpuComputePassEncoderEndPipelineStatisticsQuery(computePassEncoder *byte)
+extern func wgpuRenderPassEncoderBeginPipelineStatisticsQuery(renderPassEncoder *byte, querySet *byte, queryIndex uint32)
+extern func wgpuRenderPassEncoderEndPipelineStatisticsQuery(renderPassEncoder *byte)
+extern func wgpuComputePassEncoderWriteTimestamp(computePassEncoder *byte, querySet *byte, queryIndex uint32)
+extern func wgpuRenderPassEncoderWriteTimestamp(renderPassEncoder *byte, querySet *byte, queryIndex uint32)
+
+// Graphics debugger capture extensions.
+extern func wgpuDeviceStartGraphicsDebuggerCapture(device *byte) uint32
+extern func wgpuDeviceStopGraphicsDebuggerCapture(device *byte)
+
+// Command encoder and shader-module extensions.
+extern func wgpuCommandEncoderClearTexture(commandEncoder *byte, texture *byte, subresourceRange *byte)
+extern func wgpuDeviceCreateShaderModuleTrusted(device *byte, descriptor *byte, runtimeChecks uint64) *byte
+
+// Remaining WebGPU entry points use pointer-sized ABI arguments. The native
+// ABI places these values in the same machine-word slots as the handles and
+// descriptors used by the Hike bridge.
+extern func wgpuAdapterGetLimits(adapter uintptr, limits uintptr) uintptr
+extern func wgpuAdapterGetFeatures(adapter uintptr, features uintptr)
+extern func wgpuSupportedFeaturesFreeMembers(features uintptr)
+extern func wgpuAdapterHasFeature(adapter uintptr, feature uintptr) uintptr
+extern func wgpuAdapterGetInfo(adapter uintptr, info uintptr) uintptr
+extern func wgpuAdapterInfoFreeMembers(info uintptr)
+extern func wgpuDeviceGetLimits(device uintptr, limits uintptr) uintptr
+extern func wgpuDeviceGetFeatures(device uintptr, features uintptr)
+extern func wgpuDeviceHasFeature(device uintptr, feature uintptr) uintptr
+extern func wgpuDevicePushErrorScope(device uintptr, filter uintptr)
+extern func wgpuDevicePopErrorScope(device uintptr, callbackInfo uintptr)
+extern func wgpuDeviceCreateBuffer(device uintptr, descriptor uintptr) uintptr
+extern func wgpuBufferGetMappedRange(buffer uintptr, offset uintptr, size uintptr) uintptr
+extern func wgpuBufferUnmap(buffer uintptr)
+extern func wgpuBufferGetSize(buffer uintptr) uintptr
+extern func wgpuBufferDestroy(buffer uintptr)
+extern func wgpuBufferRelease(buffer uintptr)
+extern func wgpuQueueWriteBuffer(queue uintptr, buffer uintptr, offset uintptr, data uintptr, size uintptr)
+extern func wgpuBufferGetUsage(buffer uintptr) uintptr
+extern func wgpuBufferGetMapState(buffer uintptr) uintptr
+extern func wgpuDeviceCreateBindGroupLayout(device uintptr, descriptor uintptr) uintptr
+extern func wgpuBindGroupLayoutRelease(layout uintptr)
+extern func wgpuDeviceCreateBindGroup(device uintptr, descriptor uintptr) uintptr
+extern func wgpuBindGroupRelease(group uintptr)
+extern func wgpuDeviceCreateComputePipeline(device uintptr, descriptor uintptr) uintptr
+extern func wgpuComputePipelineGetBindGroupLayout(pipeline uintptr, groupIndex uintptr) uintptr
+extern func wgpuComputePipelineRelease(pipeline uintptr)
+extern func wgpuCommandEncoderBeginComputePass(encoder uintptr, descriptor uintptr) uintptr
+extern func wgpuCommandEncoderCopyBufferToBuffer(encoder uintptr, source uintptr, sourceOffset uintptr, destination uintptr, destinationOffset uintptr, size uintptr)
+extern func wgpuCommandEncoderClearBuffer(encoder uintptr, buffer uintptr, offset uintptr, size uintptr)
+extern func wgpuCommandEncoderInsertDebugMarker(encoder uintptr, label uintptr)
+extern func wgpuCommandEncoderPushDebugGroup(encoder uintptr, label uintptr)
+extern func wgpuCommandEncoderPopDebugGroup(encoder uintptr)
+extern func wgpuCommandEncoderCopyBufferToTexture(encoder uintptr, source uintptr, destination uintptr, copySize uintptr)
+extern func wgpuCommandEncoderCopyTextureToBuffer(encoder uintptr, source uintptr, destination uintptr, copySize uintptr)
+extern func wgpuCommandEncoderCopyTextureToTexture(encoder uintptr, source uintptr, destination uintptr, copySize uintptr)
+extern func wgpuCommandEncoderWriteTimestamp(encoder uintptr, querySet uintptr, queryIndex uintptr)
+extern func wgpuCommandEncoderResolveQuerySet(encoder uintptr, querySet uintptr, firstQuery uintptr, queryCount uintptr, destination uintptr, destinationOffset uintptr)
+extern func wgpuComputePassEncoderSetPipeline(pass uintptr, pipeline uintptr)
+extern func wgpuComputePassEncoderSetBindGroup(pass uintptr, groupIndex uintptr, group uintptr, offsetCount uintptr, offsets uintptr)
+extern func wgpuComputePassEncoderDispatchWorkgroups(pass uintptr, x uintptr, y uintptr, z uintptr)
+extern func wgpuComputePassEncoderDispatchWorkgroupsIndirect(pass uintptr, buffer uintptr, offset uintptr)
+extern func wgpuComputePassEncoderEnd(pass uintptr)
+extern func wgpuComputePassEncoderRelease(pass uintptr)
+extern func wgpuRenderPassEncoderSetBindGroup(pass uintptr, groupIndex uintptr, group uintptr, offsetCount uintptr, offsets uintptr)
+extern func wgpuRenderPassEncoderSetVertexBuffer(pass uintptr, slot uintptr, buffer uintptr, offset uintptr, size uintptr)
+extern func wgpuRenderPassEncoderSetIndexBuffer(pass uintptr, buffer uintptr, format uintptr, offset uintptr, size uintptr)
+extern func wgpuRenderPassEncoderDrawIndexed(pass uintptr, indexCount uintptr, instanceCount uintptr, firstIndex uintptr, baseVertex uintptr, firstInstance uintptr)
+extern func wgpuRenderPassEncoderDrawIndirect(pass uintptr, buffer uintptr, offset uintptr)
+extern func wgpuRenderPassEncoderDrawIndexedIndirect(pass uintptr, buffer uintptr, offset uintptr)
+extern func wgpuRenderPassEncoderSetViewport(pass uintptr, x uintptr, y uintptr, width uintptr, height uintptr, minDepth uintptr, maxDepth uintptr)
+extern func wgpuRenderPassEncoderSetScissorRect(pass uintptr, x uintptr, y uintptr, width uintptr, height uintptr)
+extern func wgpuRenderPassEncoderSetBlendConstant(pass uintptr, color uintptr)
+extern func wgpuRenderPassEncoderSetStencilReference(pass uintptr, reference uintptr)
+extern func wgpuRenderPassEncoderInsertDebugMarker(pass uintptr, label uintptr)
+extern func wgpuRenderPassEncoderPushDebugGroup(pass uintptr, label uintptr)
+extern func wgpuRenderPassEncoderPopDebugGroup(pass uintptr)
+extern func wgpuRenderPipelineGetBindGroupLayout(pipeline uintptr, groupIndex uintptr) uintptr
+extern func wgpuDeviceCreateQuerySet(device uintptr, descriptor uintptr) uintptr
+extern func wgpuQuerySetDestroy(querySet uintptr)
+extern func wgpuQuerySetRelease(querySet uintptr)
+extern func wgpuDeviceCreateRenderBundleEncoder(device uintptr, descriptor uintptr) uintptr
+extern func wgpuRenderBundleEncoderSetPipeline(encoder uintptr, pipeline uintptr)
+extern func wgpuRenderBundleEncoderSetBindGroup(encoder uintptr, groupIndex uintptr, group uintptr, offsetCount uintptr, offsets uintptr)
+extern func wgpuRenderBundleEncoderSetVertexBuffer(encoder uintptr, slot uintptr, buffer uintptr, offset uintptr, size uintptr)
+extern func wgpuRenderBundleEncoderSetIndexBuffer(encoder uintptr, buffer uintptr, format uintptr, offset uintptr, size uintptr)
+extern func wgpuRenderBundleEncoderDraw(encoder uintptr, vertexCount uintptr, instanceCount uintptr, firstVertex uintptr, firstInstance uintptr)
+extern func wgpuRenderBundleEncoderDrawIndexed(encoder uintptr, indexCount uintptr, instanceCount uintptr, firstIndex uintptr, baseVertex uintptr, firstInstance uintptr)
+extern func wgpuRenderBundleEncoderDrawIndirect(encoder uintptr, buffer uintptr, offset uintptr)
+extern func wgpuRenderBundleEncoderDrawIndexedIndirect(encoder uintptr, buffer uintptr, offset uintptr)
+extern func wgpuRenderBundleEncoderFinish(encoder uintptr, descriptor uintptr) uintptr
+extern func wgpuRenderBundleEncoderRelease(encoder uintptr)
+extern func wgpuRenderBundleRelease(bundle uintptr)
+extern func wgpuRenderPassEncoderExecuteBundles(pass uintptr, bundleCount uintptr, bundles uintptr)
+extern func wgpuSurfaceUnconfigure(surface uintptr)
+extern func wgpuTextureDestroy(texture uintptr)
+extern func wgpuTextureGetWidth(texture uintptr) uintptr
+extern func wgpuTextureGetHeight(texture uintptr) uintptr
+extern func wgpuTextureGetDepthOrArrayLayers(texture uintptr) uintptr
+extern func wgpuTextureGetMipLevelCount(texture uintptr) uintptr
+extern func wgpuTextureGetFormat(texture uintptr) uintptr
+extern func wgpuDeviceCreateTexture(device uintptr, descriptor uintptr) uintptr
+extern func wgpuQueueWriteTexture(queue uintptr, destination uintptr, data uintptr, dataSize uintptr, layout uintptr, writeSize uintptr)
+extern func wgpuDeviceCreateSampler(device uintptr, descriptor uintptr) uintptr
+extern func wgpuSamplerRelease(sampler uintptr)
+extern func wgpuBufferMapAsync(buffer uintptr, mode uintptr, offset uintptr, size uintptr, callbackInfo uintptr)
+
+// Go-facing Hike cfunc aliases. These preserve the native C symbol names
+// while causing hikec to generate Go wrappers and Plan 9 ABI stubs.
+cfunc GenerateReport(instance *byte, report *byte) = wgpuGenerateReport
+cfunc InstanceEnumerateAdapters(instance *byte, options *byte, adapters *byte) int = wgpuInstanceEnumerateAdapters
+cfunc QueueSubmitForIndex(queue *byte, commandCount int, commands *byte) uint64 = wgpuQueueSubmitForIndex
+cfunc QueueGetTimestampPeriod(queue *byte) float32 = wgpuQueueGetTimestampPeriod
+cfunc DevicePoll(device *byte, wait bool, submissionIndex *byte) bool = wgpuDevicePoll
+cfunc DeviceCreateShaderModuleSpirV(device *byte, descriptor *byte) *byte = wgpuDeviceCreateShaderModuleSpirV
+cfunc SetLogCallback(callback *byte, userdata *byte) = wgpuSetLogCallback
+cfunc SetLogLevel(level int) = wgpuSetLogLevel
+cfunc GetVersion() uint32 = wgpuGetVersion
+cfunc DeviceGetNativeMetalDevice(device *byte) *byte = wgpuDeviceGetNativeMetalDevice
+cfunc QueueGetNativeMetalCommandQueue(queue *byte) *byte = wgpuQueueGetNativeMetalCommandQueue
+cfunc TextureGetNativeMetalTexture(texture *byte) *byte = wgpuTextureGetNativeMetalTexture
+cfunc RenderPassEncoderMultiDrawIndirect(encoder *byte, buffer *byte, offset uint64, count uint32) = wgpuRenderPassEncoderMultiDrawIndirect
+cfunc RenderPassEncoderMultiDrawIndexedIndirect(encoder *byte, buffer *byte, offset uint64, count uint32) = wgpuRenderPassEncoderMultiDrawIndexedIndirect
+cfunc RenderPassEncoderMultiDrawIndirectCount(encoder *byte, buffer *byte, offset uint64, countBuffer *byte, countBufferOffset uint64, maxCount uint32) = wgpuRenderPassEncoderMultiDrawIndirectCount
+cfunc RenderPassEncoderMultiDrawIndexedIndirectCount(encoder *byte, buffer *byte, offset uint64, countBuffer *byte, countBufferOffset uint64, maxCount uint32) = wgpuRenderPassEncoderMultiDrawIndexedIndirectCount
+cfunc ComputePassEncoderBeginPipelineStatisticsQuery(computePassEncoder *byte, querySet *byte, queryIndex uint32) = wgpuComputePassEncoderBeginPipelineStatisticsQuery
+cfunc ComputePassEncoderEndPipelineStatisticsQuery(computePassEncoder *byte) = wgpuComputePassEncoderEndPipelineStatisticsQuery
+cfunc RenderPassEncoderBeginPipelineStatisticsQuery(renderPassEncoder *byte, querySet *byte, queryIndex uint32) = wgpuRenderPassEncoderBeginPipelineStatisticsQuery
+cfunc RenderPassEncoderEndPipelineStatisticsQuery(renderPassEncoder *byte) = wgpuRenderPassEncoderEndPipelineStatisticsQuery
+cfunc ComputePassEncoderWriteTimestamp(computePassEncoder *byte, querySet *byte, queryIndex uint32) = wgpuComputePassEncoderWriteTimestamp
+cfunc RenderPassEncoderWriteTimestamp(renderPassEncoder *byte, querySet *byte, queryIndex uint32) = wgpuRenderPassEncoderWriteTimestamp
+cfunc DeviceStartGraphicsDebuggerCapture(device *byte) bool = wgpuDeviceStartGraphicsDebuggerCapture
+cfunc DeviceStopGraphicsDebuggerCapture(device *byte) = wgpuDeviceStopGraphicsDebuggerCapture
+cfunc CommandEncoderClearTexture(commandEncoder *byte, texture *byte, subresourceRange *byte) = wgpuCommandEncoderClearTexture
+cfunc DeviceCreateShaderModuleTrusted(device *byte, descriptor *byte, runtimeChecks uint64) *byte = wgpuDeviceCreateShaderModuleTrusted
+
+cfunc AdapterGetLimits(adapter uintptr, limits uintptr) uintptr = wgpuAdapterGetLimits
+cfunc AdapterGetFeatures(adapter uintptr, features uintptr) = wgpuAdapterGetFeatures
+cfunc SupportedFeaturesFreeMembers(features uintptr) = wgpuSupportedFeaturesFreeMembers
+cfunc AdapterHasFeature(adapter uintptr, feature uintptr) uintptr = wgpuAdapterHasFeature
+cfunc AdapterGetInfo(adapter uintptr, info uintptr) uintptr = wgpuAdapterGetInfo
+cfunc AdapterInfoFreeMembers(info uintptr) = wgpuAdapterInfoFreeMembers
+cfunc DeviceGetLimits(device uintptr, limits uintptr) uintptr = wgpuDeviceGetLimits
+cfunc DeviceGetFeatures(device uintptr, features uintptr) = wgpuDeviceGetFeatures
+cfunc DeviceHasFeature(device uintptr, feature uintptr) uintptr = wgpuDeviceHasFeature
+cfunc DevicePushErrorScope(device uintptr, filter uintptr) = wgpuDevicePushErrorScope
+cfunc DevicePopErrorScope(device uintptr, callbackInfo uintptr) = wgpuDevicePopErrorScope
+cfunc DeviceCreateBuffer(device uintptr, descriptor uintptr) uintptr = wgpuDeviceCreateBuffer
+cfunc BufferGetMappedRange(buffer uintptr, offset uintptr, size uintptr) uintptr = wgpuBufferGetMappedRange
+cfunc BufferUnmap(buffer uintptr) = wgpuBufferUnmap
+cfunc BufferGetSize(buffer uintptr) uintptr = wgpuBufferGetSize
+cfunc BufferDestroy(buffer uintptr) = wgpuBufferDestroy
+cfunc BufferRelease(buffer uintptr) = wgpuBufferRelease
+cfunc QueueWriteBuffer(queue uintptr, buffer uintptr, offset uintptr, data uintptr, size uintptr) = wgpuQueueWriteBuffer
+cfunc BufferGetUsage(buffer uintptr) uintptr = wgpuBufferGetUsage
+cfunc BufferGetMapState(buffer uintptr) uintptr = wgpuBufferGetMapState
+cfunc DeviceCreateBindGroupLayout(device uintptr, descriptor uintptr) uintptr = wgpuDeviceCreateBindGroupLayout
+cfunc BindGroupLayoutRelease(layout uintptr) = wgpuBindGroupLayoutRelease
+cfunc DeviceCreateBindGroup(device uintptr, descriptor uintptr) uintptr = wgpuDeviceCreateBindGroup
+cfunc BindGroupRelease(group uintptr) = wgpuBindGroupRelease
+cfunc DeviceCreateComputePipeline(device uintptr, descriptor uintptr) uintptr = wgpuDeviceCreateComputePipeline
+cfunc ComputePipelineGetBindGroupLayout(pipeline uintptr, groupIndex uintptr) uintptr = wgpuComputePipelineGetBindGroupLayout
+cfunc ComputePipelineRelease(pipeline uintptr) = wgpuComputePipelineRelease
+cfunc CommandEncoderBeginComputePass(encoder uintptr, descriptor uintptr) uintptr = wgpuCommandEncoderBeginComputePass
+cfunc CommandEncoderCopyBufferToBuffer(encoder uintptr, source uintptr, sourceOffset uintptr, destination uintptr, destinationOffset uintptr, size uintptr) = wgpuCommandEncoderCopyBufferToBuffer
+cfunc CommandEncoderClearBuffer(encoder uintptr, buffer uintptr, offset uintptr, size uintptr) = wgpuCommandEncoderClearBuffer
+cfunc CommandEncoderInsertDebugMarker(encoder uintptr, label uintptr) = wgpuCommandEncoderInsertDebugMarker
+cfunc CommandEncoderPushDebugGroup(encoder uintptr, label uintptr) = wgpuCommandEncoderPushDebugGroup
+cfunc CommandEncoderPopDebugGroup(encoder uintptr) = wgpuCommandEncoderPopDebugGroup
+cfunc CommandEncoderCopyBufferToTexture(encoder uintptr, source uintptr, destination uintptr, copySize uintptr) = wgpuCommandEncoderCopyBufferToTexture
+cfunc CommandEncoderCopyTextureToBuffer(encoder uintptr, source uintptr, destination uintptr, copySize uintptr) = wgpuCommandEncoderCopyTextureToBuffer
+cfunc CommandEncoderCopyTextureToTexture(encoder uintptr, source uintptr, destination uintptr, copySize uintptr) = wgpuCommandEncoderCopyTextureToTexture
+cfunc CommandEncoderWriteTimestamp(encoder uintptr, querySet uintptr, queryIndex uintptr) = wgpuCommandEncoderWriteTimestamp
+cfunc CommandEncoderResolveQuerySet(encoder uintptr, querySet uintptr, firstQuery uintptr, queryCount uintptr, destination uintptr, destinationOffset uintptr) = wgpuCommandEncoderResolveQuerySet
+cfunc ComputePassEncoderSetPipeline(pass uintptr, pipeline uintptr) = wgpuComputePassEncoderSetPipeline
+cfunc ComputePassEncoderSetBindGroup(pass uintptr, groupIndex uintptr, group uintptr, offsetCount uintptr, offsets uintptr) = wgpuComputePassEncoderSetBindGroup
+cfunc ComputePassEncoderDispatchWorkgroups(pass uintptr, x uintptr, y uintptr, z uintptr) = wgpuComputePassEncoderDispatchWorkgroups
+cfunc ComputePassEncoderDispatchWorkgroupsIndirect(pass uintptr, buffer uintptr, offset uintptr) = wgpuComputePassEncoderDispatchWorkgroupsIndirect
+cfunc ComputePassEncoderEnd(pass uintptr) = wgpuComputePassEncoderEnd
+cfunc ComputePassEncoderRelease(pass uintptr) = wgpuComputePassEncoderRelease
+cfunc RenderPassEncoderSetBindGroup(pass uintptr, groupIndex uintptr, group uintptr, offsetCount uintptr, offsets uintptr) = wgpuRenderPassEncoderSetBindGroup
+cfunc RenderPassEncoderSetVertexBuffer(pass uintptr, slot uintptr, buffer uintptr, offset uintptr, size uintptr) = wgpuRenderPassEncoderSetVertexBuffer
+cfunc RenderPassEncoderSetIndexBuffer(pass uintptr, buffer uintptr, format uintptr, offset uintptr, size uintptr) = wgpuRenderPassEncoderSetIndexBuffer
+cfunc RenderPassEncoderDrawIndexed(pass uintptr, indexCount uintptr, instanceCount uintptr, firstIndex uintptr, baseVertex uintptr, firstInstance uintptr) = wgpuRenderPassEncoderDrawIndexed
+cfunc RenderPassEncoderDrawIndirect(pass uintptr, buffer uintptr, offset uintptr) = wgpuRenderPassEncoderDrawIndirect
+cfunc RenderPassEncoderDrawIndexedIndirect(pass uintptr, buffer uintptr, offset uintptr) = wgpuRenderPassEncoderDrawIndexedIndirect
+cfunc RenderPassEncoderSetViewport(pass uintptr, x uintptr, y uintptr, width uintptr, height uintptr, minDepth uintptr, maxDepth uintptr) = wgpuRenderPassEncoderSetViewport
+cfunc RenderPassEncoderSetScissorRect(pass uintptr, x uintptr, y uintptr, width uintptr, height uintptr) = wgpuRenderPassEncoderSetScissorRect
+cfunc RenderPassEncoderSetBlendConstant(pass uintptr, color uintptr) = wgpuRenderPassEncoderSetBlendConstant
+cfunc RenderPassEncoderSetStencilReference(pass uintptr, reference uintptr) = wgpuRenderPassEncoderSetStencilReference
+cfunc RenderPassEncoderInsertDebugMarker(pass uintptr, label uintptr) = wgpuRenderPassEncoderInsertDebugMarker
+cfunc RenderPassEncoderPushDebugGroup(pass uintptr, label uintptr) = wgpuRenderPassEncoderPushDebugGroup
+cfunc RenderPassEncoderPopDebugGroup(pass uintptr) = wgpuRenderPassEncoderPopDebugGroup
+cfunc RenderPipelineGetBindGroupLayout(pipeline uintptr, groupIndex uintptr) uintptr = wgpuRenderPipelineGetBindGroupLayout
+cfunc DeviceCreateQuerySet(device uintptr, descriptor uintptr) uintptr = wgpuDeviceCreateQuerySet
+cfunc QuerySetDestroy(querySet uintptr) = wgpuQuerySetDestroy
+cfunc QuerySetRelease(querySet uintptr) = wgpuQuerySetRelease
+cfunc DeviceCreateRenderBundleEncoder(device uintptr, descriptor uintptr) uintptr = wgpuDeviceCreateRenderBundleEncoder
+cfunc RenderBundleEncoderSetPipeline(encoder uintptr, pipeline uintptr) = wgpuRenderBundleEncoderSetPipeline
+cfunc RenderBundleEncoderSetBindGroup(encoder uintptr, groupIndex uintptr, group uintptr, offsetCount uintptr, offsets uintptr) = wgpuRenderBundleEncoderSetBindGroup
+cfunc RenderBundleEncoderSetVertexBuffer(encoder uintptr, slot uintptr, buffer uintptr, offset uintptr, size uintptr) = wgpuRenderBundleEncoderSetVertexBuffer
+cfunc RenderBundleEncoderSetIndexBuffer(encoder uintptr, buffer uintptr, format uintptr, offset uintptr, size uintptr) = wgpuRenderBundleEncoderSetIndexBuffer
+cfunc RenderBundleEncoderDraw(encoder uintptr, vertexCount uintptr, instanceCount uintptr, firstVertex uintptr, firstInstance uintptr) = wgpuRenderBundleEncoderDraw
+cfunc RenderBundleEncoderDrawIndexed(encoder uintptr, indexCount uintptr, instanceCount uintptr, firstIndex uintptr, baseVertex uintptr, firstInstance uintptr) = wgpuRenderBundleEncoderDrawIndexed
+cfunc RenderBundleEncoderDrawIndirect(encoder uintptr, buffer uintptr, offset uintptr) = wgpuRenderBundleEncoderDrawIndirect
+cfunc RenderBundleEncoderDrawIndexedIndirect(encoder uintptr, buffer uintptr, offset uintptr) = wgpuRenderBundleEncoderDrawIndexedIndirect
+cfunc RenderBundleEncoderFinish(encoder uintptr, descriptor uintptr) uintptr = wgpuRenderBundleEncoderFinish
+cfunc RenderBundleEncoderRelease(encoder uintptr) = wgpuRenderBundleEncoderRelease
+cfunc RenderBundleRelease(bundle uintptr) = wgpuRenderBundleRelease
+cfunc RenderPassEncoderExecuteBundles(pass uintptr, bundleCount uintptr, bundles uintptr) = wgpuRenderPassEncoderExecuteBundles
+cfunc SurfaceUnconfigure(surface uintptr) = wgpuSurfaceUnconfigure
+cfunc TextureDestroy(texture uintptr) = wgpuTextureDestroy
+cfunc TextureGetWidth(texture uintptr) uintptr = wgpuTextureGetWidth
+cfunc TextureGetHeight(texture uintptr) uintptr = wgpuTextureGetHeight
+cfunc TextureGetDepthOrArrayLayers(texture uintptr) uintptr = wgpuTextureGetDepthOrArrayLayers
+cfunc TextureGetMipLevelCount(texture uintptr) uintptr = wgpuTextureGetMipLevelCount
+cfunc TextureGetFormat(texture uintptr) uintptr = wgpuTextureGetFormat
+cfunc DeviceCreateTexture(device uintptr, descriptor uintptr) uintptr = wgpuDeviceCreateTexture
+cfunc QueueWriteTexture(queue uintptr, destination uintptr, data uintptr, dataSize uintptr, layout uintptr, writeSize uintptr) = wgpuQueueWriteTexture
+cfunc DeviceCreateSampler(device uintptr, descriptor uintptr) uintptr = wgpuDeviceCreateSampler
+cfunc SamplerRelease(sampler uintptr) = wgpuSamplerRelease
+cfunc BufferMapAsync(buffer uintptr, mode uintptr, offset uintptr, size uintptr, callbackInfo uintptr) = wgpuBufferMapAsync
+
+// Explicit scalar-argument ABI entry points for callback-bearing APIs. The
+// callback-info structs are expanded into machine-word arguments so hikec can
+// generate the Windows amd64 stack layout instead of treating the aggregate as
+// a Go pointer.
+cfunc instanceRequestAdapterScalarABI(instance *byte, options *byte, nextInChain uintptr, mode uintptr, callback uintptr, userdata1 uintptr, userdata2 uintptr) uint64 = wgpuInstanceRequestAdapter
+cfunc adapterRequestDeviceScalarABI(adapter *byte, descriptor *byte, nextInChain uintptr, mode uintptr, callback uintptr, userdata1 uintptr, userdata2 uintptr) uint64 = wgpuAdapterRequestDevice
+cfunc devicePopErrorScopeScalarABI(device *byte, nextInChain uintptr, mode uintptr, callback uintptr, userdata1 uintptr, userdata2 uintptr) = wgpuDevicePopErrorScope
+cfunc bufferMapAsyncScalarABI(buffer *byte, mode uintptr, offset uintptr, size uintptr, nextInChain uintptr, callbackMode uintptr, callback uintptr, userdata1 uintptr, userdata2 uintptr) = wgpuBufferMapAsync
+
+// Typed callback-info entry points.  CallbackInfoWire is the source-level
+// type for the five-word callback record; only the final native trampoline
+// expands it into scalar Windows amd64 arguments.
+cfunc c_InstanceRequestAdapterABI(instance *byte, options *byte, info CallbackInfoWire) uint64 {
+    return instanceRequestAdapterScalarABI(instance, options, info.NextInChain, info.Mode, info.Callback, info.Userdata1, info.Userdata2)
+}
+
+cfunc InstanceRequestAdapterABI(instance *byte, options *byte, info CallbackInfoWire) uint64 = c_InstanceRequestAdapterABI
+
+cfunc c_AdapterRequestDeviceABI(adapter *byte, descriptor *byte, info CallbackInfoWire) uint64 {
+    return adapterRequestDeviceScalarABI(adapter, descriptor, info.NextInChain, info.Mode, info.Callback, info.Userdata1, info.Userdata2)
+}
+
+cfunc AdapterRequestDeviceABI(adapter *byte, descriptor *byte, info CallbackInfoWire) uint64 = c_AdapterRequestDeviceABI
+
+cfunc c_DevicePopErrorScopeABI(device *byte, info CallbackInfoWire) {
+    devicePopErrorScopeScalarABI(device, info.NextInChain, info.Mode, info.Callback, info.Userdata1, info.Userdata2)
+}
+
+cfunc DevicePopErrorScopeABI(device *byte, info CallbackInfoWire) = c_DevicePopErrorScopeABI
+
+cfunc c_BufferMapAsyncABI(buffer *byte, mode uintptr, offset uintptr, size uintptr, info CallbackInfoWire) {
+    bufferMapAsyncScalarABI(buffer, mode, offset, size, info.NextInChain, info.Mode, info.Callback, info.Userdata1, info.Userdata2)
+}
+
+cfunc BufferMapAsyncABI(buffer *byte, mode uintptr, offset uintptr, size uintptr, info CallbackInfoWire) = c_BufferMapAsyncABI
+
+cfunc CreateInstance(descriptor *byte) *byte = wgpuCreateInstance
+cfunc InstanceRelease(instance *byte) = wgpuInstanceRelease
+cfunc InstanceProcessEvents(instance *byte) = wgpuInstanceProcessEvents
+cfunc InstanceCreateSurface(instance *byte, descriptor *byte) *byte = wgpuInstanceCreateSurface
+cfunc InstanceRequestAdapter(instance *byte, options *byte, callbackInfo *byte) uint64 = wgpuInstanceRequestAdapter
+cfunc AdapterRelease(adapter *byte) = wgpuAdapterRelease
+cfunc AdapterRequestDevice(adapter *byte, descriptor *byte, callbackInfo *byte) uint64 = wgpuAdapterRequestDevice
+cfunc DeviceRelease(device *byte) = wgpuDeviceRelease
+cfunc DeviceGetQueue(device *byte) *byte = wgpuDeviceGetQueue
+cfunc DeviceCreateShaderModule(device *byte, descriptor *byte) *byte = wgpuDeviceCreateShaderModule
+cfunc ShaderModuleRelease(shaderModule *byte) = wgpuShaderModuleRelease
+cfunc DeviceCreatePipelineLayout(device *byte, descriptor *byte) *byte = wgpuDeviceCreatePipelineLayout
+cfunc PipelineLayoutRelease(layout *byte) = wgpuPipelineLayoutRelease
+cfunc SurfaceGetCapabilities(surface *byte, adapter *byte, capabilities *byte) uint32 = wgpuSurfaceGetCapabilities
+cfunc SurfaceCapabilitiesFreeMembers(capabilities *byte) = wgpuSurfaceCapabilitiesFreeMembers
+cfunc SurfaceConfigure(surface *byte, config *byte) = wgpuSurfaceConfigure
+cfunc SurfaceGetCurrentTexture(surface *byte, texture *byte) = wgpuSurfaceGetCurrentTexture
+cfunc SurfacePresent(surface *byte) = wgpuSurfacePresent
+cfunc SurfaceRelease(surface *byte) = wgpuSurfaceRelease
+cfunc TextureCreateView(texture *byte, descriptor *byte) *byte = wgpuTextureCreateView
+cfunc TextureViewRelease(view *byte) = wgpuTextureViewRelease
+cfunc TextureRelease(texture *byte) = wgpuTextureRelease
+cfunc DeviceCreateRenderPipeline(device *byte, descriptor *byte) *byte = wgpuDeviceCreateRenderPipeline
+cfunc RenderPipelineRelease(pipeline *byte) = wgpuRenderPipelineRelease
+cfunc DeviceCreateCommandEncoder(device *byte, descriptor *byte) *byte = wgpuDeviceCreateCommandEncoder
+cfunc CommandEncoderBeginRenderPass(encoder *byte, descriptor *byte) *byte = wgpuCommandEncoderBeginRenderPass
+cfunc RenderPassEncoderSetPipeline(pass *byte, pipeline *byte) = wgpuRenderPassEncoderSetPipeline
+cfunc RenderPassEncoderDraw(pass *byte, vertexCount uint32, instanceCount uint32, firstVertex uint32, firstInstance uint32) = wgpuRenderPassEncoderDraw
+cfunc RenderPassEncoderEnd(pass *byte) = wgpuRenderPassEncoderEnd
+cfunc RenderPassEncoderRelease(pass *byte) = wgpuRenderPassEncoderRelease
+cfunc CommandEncoderFinish(encoder *byte, descriptor *byte) *byte = wgpuCommandEncoderFinish
+cfunc CommandEncoderRelease(encoder *byte) = wgpuCommandEncoderRelease
+cfunc CommandBufferRelease(buffer *byte) = wgpuCommandBufferRelease
+cfunc QueueSubmit(queue *byte, commandCount uint64, commands *byte) = wgpuQueueSubmit
+cfunc QueueRelease(queue *byte) = wgpuQueueRelease
+
+// Callback state and native C-ABI entries used by the Go wrapper. These are
+// intentionally kept in this file so one Hike source unit produces the one
+// native SXSO used by this package.
+type WGPUStringView struct {
+	Data uintptr
+	Length uintptr
+}
+
+type RequestAdapterCallbackState struct {
+	Status uintptr
+	Adapter uintptr
+	MessageData uintptr
+	MessageLength uintptr
+	Done uintptr
+}
+
+cfunc c_WGPUStaticRequestAdapterCallback(status int, adapter *byte, messageView *WGPUStringView, state *RequestAdapterCallbackState, _ *byte) {
+	state.Status = status
+	state.Adapter = adapter
+	state.MessageData = messageView.Data
+	state.MessageLength = messageView.Length
+	state.Done = 1
+}
+
+type RequestDeviceCallbackState struct {
+	Status uintptr
+	Device uintptr
+	MessageData uintptr
+	MessageLength uintptr
+	Done uintptr
+}
+
+cfunc WGPUStaticRequestAdapterCallback(status int, adapter *byte, messageView *WGPUStringView, state *RequestAdapterCallbackState, _ *byte) {
+	state.Status = status
+	state.Adapter = adapter
+	state.MessageData = messageView.Data
+	state.MessageLength = messageView.Length
+	state.Done = 1
+}
+
+cfunc c_WGPUStaticRequestDeviceCallback(status int, device *byte, messageView *WGPUStringView, state *RequestDeviceCallbackState, _ *byte) {
+	state.Status = status
+	state.Device = device
+	state.MessageData = messageView.Data
+	state.MessageLength = messageView.Length
+	state.Done = 1
+}
+
+cfunc WGPUStaticRequestDeviceCallback(status int, device *byte, messageView *WGPUStringView, state *RequestDeviceCallbackState, _ *byte) {
+	state.Status = status
+	state.Device = device
+	state.MessageData = messageView.Data
+	state.MessageLength = messageView.Length
+	state.Done = 1
+}
+
+// Address accessors for the native callback trampolines.
+extern func RequestAdapterCallbackPtr() uintptr = WGPUStaticRequestAdapterCallback
+extern func RequestDeviceCallbackPtr() uintptr = WGPUStaticRequestDeviceCallback
+
